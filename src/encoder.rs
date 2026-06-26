@@ -6,9 +6,10 @@ const BLOCK_SIZE : usize = 16;
 #[derive(Serialize, Deserialize)]
 pub struct BlockSvd {
     pub k : usize,
-    pub u_data : Vec<f32>,
-    pub sigma_data : Vec<f32>,
-    pub vt_data : Vec<f32>,
+    pub u_data : Vec<i8>,
+    pub sigma_data : Vec<u8>,
+    pub sigma_max : f32,
+    pub vt_data : Vec<i8>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -24,6 +25,17 @@ pub struct EncodedImage {
     pub height : u32,
     pub block_size : u32,
     pub blocks : Vec<EncodedBlock>,
+}
+
+// Delta Encoding on i8 vectors
+fn delta_encode(data : &[i8]) -> Vec<i8> {
+    if data.is_empty() { return vec![]; }
+    let mut encoded = Vec::with_capacity(data.len());
+    encoded.push(data[0]); // Select first element as referance
+    for i in 1..data.len() {
+        encoded.push(data[i].wrapping_sub(data[i - 1]));
+    }
+    encoded
 }
 
 //Perform dynamic energy range SVD on a single channel matrix
@@ -47,27 +59,36 @@ fn encode_block_channel(matrix : &DMatrix<f32>, rank_ratio : f32) -> BlockSvd {
     let mut u_trimmed = Vec::with_capacity(rows * k);
     for c in 0..k {
         for r in 0..rows {
-            u_trimmed.push(u[(r, c)]);
+            let val = u[(r, c)].clamp(-1.0, 1.0);
+            u_trimmed.push((val * 127.0).round() as i8);
         }
     }
 
     let mut vt_trimmed = Vec::with_capacity(k * cols);
     for c in 0..cols {
         for r in 0..k{
-            vt_trimmed.push(vt[(r, c)]);
+            let val = vt[(r, c)].clamp(-1.0, 1.0);
+            vt_trimmed.push((val * 127.0).round() as i8);
         }
     }
     
+    let sigma_max = if k > 0 { sigma[0] } else { 1.0 };
     let mut sigma_trimmed = Vec::with_capacity(k);
     for i in 0..k {
-        sigma_trimmed.push(sigma[i]);
+        let ratio = (sigma[i] / sigma_max).clamp(0.0, 1.0);
+        sigma_trimmed.push((ratio * 255.0).round() as u8);
     }
+
+    // Delta encode U and Vt
+    let delta_u = delta_encode(&u_trimmed);
+    let delta_vt = delta_encode(&vt_trimmed);
 
     BlockSvd {
         k,
-        u_data : u_trimmed,
+        u_data : delta_u,
         sigma_data : sigma_trimmed,
-        vt_data : vt_trimmed,
+        sigma_max,
+        vt_data : delta_vt,
     }
 
 }
