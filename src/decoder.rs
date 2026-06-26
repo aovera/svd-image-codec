@@ -21,12 +21,12 @@ pub fn decode_image(encoded : &EncodedImage) -> Vec<u32> {
             let block = &encoded.blocks[block_idx];
             block_idx += 1;
 
-            // Blok matrislerini güvenli inşa edip çarpıyoruz
+            // Build block matrices
             let r_mat = decode_block_channel(&block.red, actual_rows, actual_cols);
             let g_mat = decode_block_channel(&block.green, actual_rows, actual_cols);
             let b_mat = decode_block_channel(&block.blue, actual_rows, actual_cols);
 
-            // Çözülen bloğu ana frame buffer'a yazma
+            // Print decoded block to main frame buffer
             for r in 0..actual_rows {
                 let global_y = by * block_size + r;
                 for c in 0..actual_cols {
@@ -79,6 +79,6 @@ fn decode_block_channel(channel : &BlockSvd, rows : usize, cols : usize) -> DMat
         }
     }
 
-    // Matris mult: A = U * Sigma * Vt
+    // Matrix mult: A = U * Sigma * Vt
     u * sigma * vt
 }
