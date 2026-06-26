@@ -6,6 +6,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use minifb::{Window, WindowOptions};
+use flate2::write::ZlibEncoder;
+use flate2::read::ZlibDecoder;
+use flate2::Compression;
 
 fn main() {
     let args : Vec<String> = env::args().collect();
@@ -82,13 +85,13 @@ fn handle_encode(args : &[String]) {
     println!("[Encoder] Calculating SVD (Rank ratio: %{})...", rank_ratio * 100.0);
     let encoded = encoder::encode_image(&raw_pixels, width, height, rank_ratio);
 
-    let max_possible_rank = std::cmp::min(width, height);
-
     // Serialize and write to disk
     println!("[I/O] Saving: {}", output_path);
     let encoded_bytes = bincode::serialize(&encoded).unwrap();
-    let mut file = File::create(output_path).unwrap();
-    file.write_all(&encoded_bytes).unwrap();
+    let file = File::create(output_path).unwrap();
+    let mut compressor = ZlibEncoder::new(file, Compression::best());
+    compressor.write_all(&encoded_bytes).unwrap();
+    compressor.finish().unwrap();
     println!("Done.");
 }
 
@@ -102,11 +105,12 @@ fn handle_view(args : &[String]) {
     println!("Reading: {}", input_path);
 
     // Read and deserialize
-    let mut file = File::open(input_path).unwrap_or_else(|_| {
+    let file = File::open(input_path).unwrap_or_else(|_| {
         panic!("Could not open: {}", input_path);
     });
+    let mut decompressor = ZlibDecoder::new(file);
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).unwrap();
+    decompressor.read_to_end(&mut buffer).unwrap();
 
     let encoded : encoder::EncodedImage = bincode::deserialize(&buffer).unwrap();
     let width = encoded.width;
