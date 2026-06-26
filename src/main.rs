@@ -42,7 +42,7 @@ fn print_usage() {
 
 fn handle_encode(args : &[String]) {
     // Parse arguments
-    let mut rank_ratio = 0.05; // Default 5%
+    let mut rank_ratio = 0.30; // Default 30%
     let mut input_idx = 2;
 
     if args.len() < 4 {
