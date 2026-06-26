@@ -16,9 +16,11 @@ Unlike naive SVD compression methods that process an entire image as a single ma
 Ensure you have Rust and Cargo installed on your system.
 
 
-```git clone [https://github.com/aovera/sdv-image-codec](https://github.com/aovera/sdv-image-codec)```
-cd sdv-image-codec
-cargo build --release
+```git clone https://github.com/aovera/sdv-image-codec```
+
+```cd sdv-image-codec```
+
+```cargo build --release```
 
 Usage
 
