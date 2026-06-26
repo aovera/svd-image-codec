@@ -1,6 +1,104 @@
 use nalgebra::DMatrix;
 use crate::encoder::{EncodedImage, BlockSvd};
 
+// Decode delta encoding
+fn delta_decode(data : &[i8]) -> Vec<i8> {
+    if data.is_empty() { return vec![]; }
+    let mut decoded = Vec::with_capacity(data.len());
+    decoded.push(data[0]); // Select referance
+    for i in 1..data.len() {
+        decoded.push(decoded[i - 1].wrapping_add(data[i]));
+    }
+    decoded
+}
+
+pub fn decode_image(encoded : &EncodedImage) -> Vec<u32> {
+    let w = encoded.width as usize;
+    let h = encoded.height as usize;
+    let block_size = encoded.block_size as usize;
+
+    let mut raw_rgb = vec![0u32; w * h];
+
+    let blocks_x = (w + block_size - 1) / block_size;
+    let blocks_y = (h + block_size - 1) / block_size;
+
+    let mut block_idx = 0;
+
+    for by in 0..blocks_y {
+        for bx in 0..blocks_x {
+            let actual_rows = std::cmp::min(block_size, h - by * block_size);
+            let actual_cols = std::cmp::min(block_size, w - bx * block_size);
+
+            let block = &encoded.blocks[block_idx];
+            block_idx += 1;
+
+            // Rebuilding block matrices
+            let r_mat = decode_block_channel(&block.red, actual_rows, actual_cols);
+            let g_mat = decode_block_channel(&block.green, actual_rows, actual_cols);
+            let b_mat = decode_block_channel(&block.blue, actual_rows, actual_cols);
+
+            // Write decoded block to main frame buffer
+            for r in 0..actual_rows {
+                let global_y = by * block_size + r;
+                for c in 0..actual_cols {
+                    let global_x = bx * block_size + c;
+
+                    let red = r_mat[(r, c)].clamp(0.0, 255.0) as u32;
+                    let green = g_mat[(r, c)].clamp(0.0, 255.0) as u32;
+                    let blue = b_mat[(r, c)].clamp(0.0, 255.0) as u32;
+
+                    raw_rgb[global_y * w + global_x] = (red << 16) | (green << 8) | blue;
+                }
+            }
+        }
+    }
+
+    raw_rgb
+}
+
+fn decode_block_channel(channel : &BlockSvd, rows : usize, cols : usize) -> DMatrix<f32> {
+    let k = channel.k;
+    let u_decoded = delta_decode(&channel.u_data);
+    let vt_decoded = delta_decode(&channel.vt_data);
+
+    // Rebuild U matrix
+    let mut u = DMatrix::zeros(rows, k);
+    for c in 0..k {
+        for r in 0..rows {
+            // Indexing
+            let idx = c * rows + r;
+            if idx < u_decoded.len() {
+                u[(r, c)] = (u_decoded[idx] as f32) / 127.0;
+            }
+        }
+    }
+
+    // Rebuild Vt matrix
+    let mut vt = DMatrix::zeros(k, cols);
+    for c in 0..cols {
+        for r in 0..k {
+            let idx = c * k + r;
+            if idx < vt_decoded.len() {
+                vt[(r, c)] = (vt_decoded[idx] as f32) / 127.0;
+            }
+        }
+    }
+    
+    // Rebuild Sigma diagonal matrix
+    let mut sigma = DMatrix::zeros(k, k);
+    for i in 0..k {
+        if i < channel.sigma_data.len() {
+            let ratio = (channel.sigma_data[i] as f32) / 255.0;
+            sigma[(i, i)] = channel.sigma_max * ratio;
+        }
+    }
+
+    // Matrix mult: A = U * Sigma * Vt
+    u * sigma * vt
+}
+use nalgebra::DMatrix;
+use crate::encoder::{EncodedImage, BlockSvd};
+
 pub fn decode_image(encoded : &EncodedImage) -> Vec<u32> {
     let w = encoded.width as usize;
     let h = encoded.height as usize;
