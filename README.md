@@ -30,11 +30,11 @@ You can run the compiled binary located at target/release/sdv (or sdv.exe on Win
 Compress any .png or .jpg image into the .svd format by specifying your desired rank retention ratio:
 Bash
 
-# Encode using the default quality (retains 95% of components)
+## Encode using the default quality - Default 30%
 cargo run -- encode input.png output.svd
 
-# Selective compression - retains only 30% of components
-cargo run -- encode -k 30 input.png output.svd
+## Selective compression - retains only 20% of components
+cargo run -- encode -k 20 input.png output.svd
 
 2. Displaying an SVD File (View)
 
